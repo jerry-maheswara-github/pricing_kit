@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use crate::model::adjustment::{AppliedAdjustment, PriceAdjustment};
 use crate::model::currency::{Currency, CurrencyConverter};
 use crate::model::markup::MarkupType;
 
@@ -67,20 +68,20 @@ pub struct PricingDetail {
     pub sell_currency: Currency,
     /// The markup strategy applied to the buy price.
     pub markup: Option<MarkupType>,
-
     /// The markup value converted to the buy currency.
     pub markup_value_in_buy_currency: Option<f64>,
     /// The markup value represented in the sell currency.
     pub markup_value_in_sell_currency: Option<f64>,
     /// The buy price after markup, before currency conversion.
     pub converted_buy_price: Option<f64>,
-
     /// Exchange rate of the buy currency relative to a common base.
     pub buy_currency_rate: Option<f64>,
     /// Exchange rate of the sell currency relative to the same base.
     pub sell_currency_rate: Option<f64>,
     /// Effective exchange rate from buy_currency to sell_currency.
     pub exchange_rate: Option<f64>,
+
+    pub applied_adjustments: Vec<AppliedAdjustment>,
 }
 
 impl PricingDetail {
@@ -98,6 +99,7 @@ impl PricingDetail {
             buy_currency_rate: None,
             sell_currency_rate: None,
             exchange_rate: None,
+            applied_adjustments: vec![],
         }
     }
 
@@ -183,6 +185,61 @@ impl PricingDetail {
         let converted = (sell_base / buy_rate) * sell_rate;
         self.markup_value_in_sell_currency = Some((markup_in_buy / buy_rate) * sell_rate);
         self.sell_price = converted;
+    }
+    pub fn apply_adjustments(
+        &mut self,
+        adjustments: &[PriceAdjustment],
+        converter: &CurrencyConverter,
+    ) {
+        let mut final_price = self.sell_price;
+        self.applied_adjustments.clear();
+
+        for adj in adjustments {
+            let applied = match adj {
+                PriceAdjustment::Tax { name, percentage } => {
+                    let amt = final_price * (percentage / 100.0);
+                    final_price += amt;
+                    AppliedAdjustment {
+                        kind: "Tax".into(),
+                        name: name.clone(),
+                        percentage: Some(*percentage),
+                        original_currency: Some(self.sell_currency.clone()),
+                        original_amount: Some(amt),
+                        applied_amount: amt,
+                    }
+                }
+
+                PriceAdjustment::Discount { name, percentage } => {
+                    let amt = final_price * (percentage / 100.0);
+                    final_price -= amt;
+                    AppliedAdjustment {
+                        kind: "Discount".into(),
+                        name: name.clone(),
+                        percentage: Some(*percentage),
+                        original_currency: Some(self.sell_currency.clone()),
+                        original_amount: Some(amt),
+                        applied_amount: -amt,
+                    }
+                }
+
+                PriceAdjustment::Fixed { name, amount, currency } => {
+                    let converted = converter.convert(*amount, currency, &self.sell_currency);
+                    final_price += converted;
+                    AppliedAdjustment {
+                        kind: "Fixed".into(),
+                        name: name.clone(),
+                        percentage: None,
+                        original_currency: Some(currency.clone()),
+                        original_amount: Some(*amount),
+                        applied_amount: converted,
+                    }
+                }
+            };
+
+            self.applied_adjustments.push(applied);
+        }
+
+        self.sell_price = final_price;
     }
 }
 
