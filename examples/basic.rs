@@ -1,18 +1,23 @@
-use pricing_kit::model::Currency;
-use pricing_kit::model::{CurrencyConverter, Pricing};
-fn main(){
+use pricing_kit::{Currency, CurrencyConverter, PricingDetail, MarkupType};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let usd = Currency::new("USD", "American Dollar");
     let idr = Currency::new("IDR", "Indonesian Rupiah");
-    let mut pricing = Pricing::new(100.0, usd.clone());
 
     let mut converter = CurrencyConverter::new();
     converter.add_exchange_rate(&usd, 1.0);
     converter.add_exchange_rate(&idr, 16500.0);
 
-    pricing.set_sell_price_by_amount(50.0, &converter);
-    let sell_price_in_idr = pricing.convert_sell_price(&converter, &idr);
+    let mut pricing = PricingDetail::new(100.0, usd.clone(), idr.clone());
+    pricing.set_markup(MarkupType::Amount {
+        value: 3500.0,
+        currency: idr.clone(),
+    });
 
-    println!("converter: {:?}", converter);
-    println!("pricing: {:?}", pricing);
-    println!("Sell price in IDR: {}", sell_price_in_idr.abs());
+    pricing.apply_markup(&converter);
+
+    let json = serde_json::to_string_pretty(&pricing)?;
+    println!("Pricing:\n{}", json);
+
+    Ok(())
 }

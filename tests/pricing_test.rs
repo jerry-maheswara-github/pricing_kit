@@ -1,68 +1,82 @@
 #[cfg(test)]
 mod tests {
-    use pricing_kit::model::{Currency, CurrencyConverter, Pricing};
-    
-    #[test]
-    fn test_pricing_new() {
-        let usd = Currency::new("USD", "American Dollar");
-        let pricing = Pricing::new(100.0, usd.clone());
+    use pricing_kit::{Currency, CurrencyConverter, MarkupType, PricingDetail};
 
-        assert_eq!(pricing.buy_price, 100.0);
-        assert_eq!(pricing.sell_price, 100.0);
-        assert_eq!(pricing.buy_currency.get_code(), "USD");
-        assert_eq!(pricing.sell_currency.get_code(), "USD");
-    }
-
-    #[test]
-    fn test_set_sell_price_by_amount() {
-        let usd = Currency::new("USD", "American Dollar");
-        let mut pricing = Pricing::new(100.0, usd.clone());
+    fn setup_converter() -> CurrencyConverter {
         let mut converter = CurrencyConverter::new();
-        converter.add_exchange_rate(&usd, 1.0);
-
-        pricing.set_sell_price_by_amount(20.0, &converter);
-
-        assert_eq!(pricing.sell_price, 120.0); // 100 + 20
-    }
-
-    #[test]
-    fn test_set_sell_price_by_percentage() {
-        let usd = Currency::new("USD", "American Dollar");
-        let mut pricing = Pricing::new(100.0, usd.clone());
-
-        pricing.set_sell_price_by_percentage(20.0);
-        assert_eq!(pricing.sell_price, 120.0); // 100 * (1 + 0.20)
-    }
-
-    #[test]
-    fn test_set_sell_price_by_commission() {
-        let usd = Currency::new("USD", "American Dollar");
+        let usd = Currency::new("USD", "US Dollar");
         let idr = Currency::new("IDR", "Indonesian Rupiah");
-        let mut pricing = Pricing::new(100.0, usd.clone());
-        let mut converter = CurrencyConverter::new();
 
-        converter.add_exchange_rate(&usd, 1.0); 
-        converter.add_exchange_rate(&idr, 14500.0); 
-
-        pricing.set_sell_price_by_commission(10.0, &converter);
-
-        let expected_sell_price = 100.0 + (10.0 / 14500.0); 
-
-        eprintln!("expected_sell_price = {:?}", expected_sell_price);
-        eprintln!("abs = {:?}", (pricing.sell_price - expected_sell_price).abs());
-        assert!((pricing.sell_price - expected_sell_price).abs() <=  9.999310344827592 );  
+        converter.add_exchange_rate(&usd, 1.0);        // USD as base
+        converter.add_exchange_rate(&idr, 16500.0);    // 1 USD = 16,500 IDR
+        converter
     }
-    
-    #[test]
-    fn test_convert_sell_price() {
-        let usd = Currency::new("USD", "American Dollar");
-        let idr = Currency::new("IDR", "Indonesian Rupiah");
-        let pricing = Pricing::new(432.62499, usd.clone());
-        let mut converter = CurrencyConverter::new();
-        converter.add_exchange_rate(&usd, 1.0); // Assume 1 USD = 1 USD
-        converter.add_exchange_rate(&idr, 16500.0); // Assume 1 USD = 14500 IDR
 
-        let converted_price = pricing.convert_sell_price(&converter, &idr);
-        assert_eq!(converted_price, 7138312.335); // 432.6 USD to IDR at 14500 rate
+    fn get_currencies() -> (Currency, Currency) {
+        (
+            Currency::new("USD", "US Dollar"),
+            Currency::new("IDR", "Indonesian Rupiah"),
+        )
+    }
+
+    #[test]
+    fn test_markup_amount_in_idr() {
+        let (usd, idr) = get_currencies();
+        let converter = setup_converter();
+
+        let mut pricing = PricingDetail::new(1000.0, usd.clone(), idr.clone());
+        pricing.set_markup(MarkupType::Amount {
+            value: 49500.0,
+            currency: idr.clone(),
+        });
+
+        pricing.apply_markup(&converter);
+
+        assert_eq!(pricing.get_buy_currency_rate(), Some(1.0));
+        assert_eq!(pricing.get_sell_currency_rate(), Some(16500.0));
+
+        // 49500 IDR = 3 USD → buy_price = 1000 → converted_buy = 1003
+        assert!((pricing.get_converted_buy_price().unwrap() - 1003.0).abs() < 0.01);
+        assert!((pricing.get_sell_price() - 16549500.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_markup_percentage() {
+        let (usd, idr) = get_currencies();
+        let converter = setup_converter();
+
+        let mut pricing = PricingDetail::new(1000.0, usd.clone(), idr.clone());
+        pricing.set_markup(MarkupType::Percentage(10.0));
+        pricing.apply_markup(&converter);
+
+        // 10% of 1000 = 100 → sell_base = 1100 → IDR: 1100 * 16500 = 18,150,000
+        assert_eq!(pricing.get_markup_in_buy_currency().unwrap(), 100.0);
+        assert!((pricing.get_sell_price() - 18150000.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_markup_commission() {
+        let (usd, idr) = get_currencies();
+        let converter = setup_converter();
+
+        let mut pricing = PricingDetail::new(1000.0, usd.clone(), idr.clone());
+        pricing.set_markup(MarkupType::Commission(10.0));
+        pricing.apply_markup(&converter);
+
+        // 1000 / (1 - 0.1) = 1111.11
+        assert!((pricing.get_converted_buy_price().unwrap() - 1111.11).abs() < 0.1);
+    }
+
+    #[test]
+    fn test_no_markup() {
+        let (usd, idr) = get_currencies();
+        let converter = setup_converter();
+
+        let mut pricing = PricingDetail::new(1000.0, usd.clone(), idr.clone());
+        pricing.apply_markup(&converter);
+
+        assert_eq!(pricing.get_markup(), &None);
+        assert_eq!(pricing.get_markup_in_buy_currency().unwrap(), 0.0);
+        assert_eq!(pricing.get_sell_price(), 16500000.0);
     }
 }
