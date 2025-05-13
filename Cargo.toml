@@ -1,0 +1,16 @@
+[package]
+name = "pricing_kit"
+version = "0.1.0"
+edition = "2024"
+authors = ["Jerry Maheswara  <jerrymaheswara@gmail.com>"]
+description = "A flexible, lightweight Rust library for pricing strategies, including calculating and managing prices, markup, commissions, and multi-currency support."
+license = "Apache-2.0"
+repository = "https://github.com/jerry-maheswara-github/pricing_kit"
+documentation = "https://docs.rs/pricing_kit"
+readme = "README.md"
+keywords = ["pricing", "markup", "kit", "currency", "commission"]
+categories = ["web-programming"]
+
+[dependencies]
+serde_json = "1.0.140"
+serde = { version = "1.0.219", features = ["derive"] }
