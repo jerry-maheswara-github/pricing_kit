@@ -125,6 +125,7 @@
 
 /// Core data model definitions for pricing operations.
 pub mod model;
+pub mod rule_engine;
 
 pub use model::currency::Currency;
 pub use model::currency::CurrencyConverter;
