@@ -4,16 +4,16 @@ A flexible and extensible Rust library for calculating and managing product pric
 
 ## ✨ Features
 
-- ✅ Define a **base (buy) price** and calculate **sell prices** based on:
-  - ➕ Flat amount markups
-  - 📈 Percentage markups
-  - 💰 Commissions in other currencies
-- 🌐 Support for **multi-currency** operations using exchange rates
-- 💸 Support for **adjustments** such as:
-  - 🧾 **Tax** calculations with percentage-based rates
-  - 💸 **Discounts** based on percentage
-  - 🏷️ **Fixed fees** with customizable currencies
-- 🧱 Clean and extensible API design, ready for future enhancements
+- Define a **base (buy) price** and calculate **sell prices** based on:
+  - Flat amount markups
+  - Percentage markups
+  - Commissions in other currencies
+- Support for **multi-currency** operations using exchange rates
+- Support for **adjustments** such as:
+  - **Tax** calculations with percentage-based rates
+  - **Discounts** based on percentage
+  - **Fixed fees** with customizable currencies
+- Clean and extensible API design, ready for future enhancements
 
 
 ## ⚡ Quick Start
@@ -91,10 +91,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 This crate is designed to be:
 
-- 👶 Easy to use for common e-commerce and fintech pricing scenarios
-- 🧮 Accurate, currency-aware, and reliable in financial calculations
-- 🔌 Ready for dynamic adjustments such as tax, discount, and fixed fees
-- 🧱 Extensible for future features like tiered pricing, tax rules, and promotions
+- Easy to use for common e-commerce and fintech pricing scenarios
+- Accurate, currency-aware, and reliable in financial calculations
+- Ready for dynamic adjustments such as tax, discount, and fixed fees
+- Extensible for future features like tiered pricing, tax rules, and promotions
 
 ---
 

@@ -98,7 +98,7 @@ impl Currency {
 ///
 /// - Missing exchange rates will fallback to `1.0`, so always validate your inputs.
 /// - To get precise results, make sure exchange rates are consistently set relative to the same base currency.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct CurrencyConverter {
     exchange_rates: HashMap<String, f64>,
 }
