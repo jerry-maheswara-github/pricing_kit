@@ -1,6 +1,6 @@
 [package]
 name = "pricing_kit"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2024"
 authors = ["Jerry Maheswara  <jerrymaheswara@gmail.com>"]
 description = "A flexible, lightweight Rust library for pricing strategies, including calculating and managing prices, markup, commissions, and multi-currency support."

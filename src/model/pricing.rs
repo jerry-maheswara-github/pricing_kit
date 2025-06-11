@@ -56,7 +56,7 @@ use crate::model::markup::MarkupType;
 /// # Serialization
 ///
 /// Supports serialization with `serde` for logging, debugging, or API responses.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PricingDetail {
     /// The base price at which the product was bought.
     pub buy_price: f64,
