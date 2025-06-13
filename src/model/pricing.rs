@@ -80,12 +80,11 @@ pub struct PricingDetail {
     pub sell_currency_rate: Option<f64>,
     /// Effective exchange rate from buy_currency to sell_currency.
     pub exchange_rate: Option<f64>,
-
+    /// A list of adjustments (e.g., discounts, fees) applied to the pricing calculation.
     pub applied_adjustments: Vec<AppliedAdjustment>,
 }
 
 impl PricingDetail {
-
     pub fn new(buy_price: f64, buy_currency: Currency, sell_currency: Currency) -> Self {
         Self {
             buy_price,
@@ -106,33 +105,57 @@ impl PricingDetail {
     pub fn get_buy_price(&self) -> f64 {
         self.buy_price
     }
+    
+    pub fn set_buy_price(&mut self, value: f64) {
+        self.buy_price = value;
+    }
 
     pub fn get_sell_price(&self) -> f64 {
         self.sell_price
+    }
+    
+    pub fn set_sell_price(&mut self, value: f64) {
+        self.sell_price = value;
     }
 
     pub fn get_buy_currency(&self) -> &Currency {
         &self.buy_currency
     }
+    
+    pub fn set_buy_currency(&mut self, value: Currency) {
+        self.buy_currency = value;
+    }
 
     pub fn get_sell_currency(&self) -> &Currency {
         &self.sell_currency
+    }
+    
+    pub fn set_sell_currency(&mut self, value: Currency) {
+        self.sell_currency = value;
     }
 
     pub fn get_markup(&self) -> &Option<MarkupType> {
         &self.markup
     }
 
-    pub fn set_markup(&mut self, markup: MarkupType) {
-        self.markup = Some(markup);
+    pub fn set_markup(&mut self, markup: Option<MarkupType>) {
+        self.markup = markup;
     }
 
     pub fn get_buy_currency_rate(&self) -> Option<f64> {
         self.buy_currency_rate
     }
+    
+    pub fn set_buy_currency_rate(&mut self, rate: Option<f64>) {
+        self.buy_currency_rate = rate;
+    }
 
     pub fn get_sell_currency_rate(&self) -> Option<f64> {
         self.sell_currency_rate
+    }
+    
+    pub fn set_sell_currency_rate(&mut self, rate: Option<f64>) {
+        self.sell_currency_rate = rate;
     }
 
     pub fn get_exchange_rate(&self) -> Option<f64> {
@@ -142,50 +165,69 @@ impl PricingDetail {
         }
     }
 
+    pub fn set_exchange_rate(&mut self, value: Option<f64>) {
+        self.exchange_rate = value;
+    }
+
     pub fn get_markup_value_in_buy_currency(&self) -> Option<f64> {
         self.markup_value_in_buy_currency
     }
 
+    pub fn set_markup_value_in_buy_currency(&mut self, value: Option<f64>) {
+        self.markup_value_in_buy_currency = value;
+    }
+    
     pub fn get_markup_value_in_sell_currency(&self) -> Option<f64> {
         self.markup_value_in_sell_currency
     }
 
+    pub fn set_markup_value_in_sell_currency(&mut self, value: Option<f64>) {
+        self.markup_value_in_sell_currency = value;
+    }
+    
     pub fn get_converted_buy_price(&self) -> Option<f64> {
         self.converted_buy_price
     }
-    pub fn get_markup_in_sell_currency(&self) -> Option<f64> {
-        self.markup_value_in_sell_currency
-    }
-
-    pub fn get_markup_in_buy_currency(&self) -> Option<f64> {
-        self.markup_value_in_buy_currency
+    
+    pub fn set_converted_buy_price(&mut self, price: Option<f64>) {
+        self.converted_buy_price = price;
     }
 
     pub fn apply_markup(&mut self, converter: &CurrencyConverter) {
-        let buy_rate = converter.get_exchange_rate(&self.buy_currency).unwrap_or(1.0);
-        let sell_rate = converter.get_exchange_rate(&self.sell_currency).unwrap_or(1.0);
+        // Get exchange rates safely
+        let Some(buy_rate) = converter.get_exchange_rate(&self.buy_currency) else {
+            return;
+        };
+        let Some(sell_rate) = converter.get_exchange_rate(&self.sell_currency) else {
+            return;
+        };
+
+        let exchange_rate = sell_rate / buy_rate;
 
         self.buy_currency_rate = Some(buy_rate);
         self.sell_currency_rate = Some(sell_rate);
-        self.exchange_rate = Some(sell_rate / buy_rate);
+        self.exchange_rate = Some(exchange_rate);
 
+        // Handle markup (can be None)
         let markup_in_buy = match &self.markup {
             Some(MarkupType::Amount { value, currency }) => {
                 converter.convert(*value, currency, &self.buy_currency)
-            },
+            }
             Some(MarkupType::Percentage(pct)) => self.buy_price * pct / 100.0,
             Some(MarkupType::Commission(pct)) => self.buy_price * pct / (100.0 - pct),
             None => 0.0,
         };
 
         self.markup_value_in_buy_currency = Some(markup_in_buy);
+
         let sell_base = self.buy_price + markup_in_buy;
         self.converted_buy_price = Some(sell_base);
 
-        let converted = (sell_base / buy_rate) * sell_rate;
-        self.markup_value_in_sell_currency = Some((markup_in_buy / buy_rate) * sell_rate);
-        self.sell_price = converted;
+        let sell_price = sell_base * exchange_rate;
+        self.markup_value_in_sell_currency = Some(markup_in_buy * exchange_rate);
+        self.sell_price = sell_price;
     }
+
     pub fn apply_adjustments(
         &mut self,
         adjustments: &[PriceAdjustment],

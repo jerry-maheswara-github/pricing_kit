@@ -12,7 +12,7 @@ mod tests {
         converter.add_exchange_rate(&idr, 16500.0);
 
         let mut pricing = PricingDetail::new(1000.0, usd.clone(), idr.clone());
-        pricing.set_markup(MarkupType::Percentage(10.0));
+        pricing.set_markup(Some(MarkupType::Percentage(10.0)));
         pricing.apply_markup(&converter);
 
         let adjustments = vec![

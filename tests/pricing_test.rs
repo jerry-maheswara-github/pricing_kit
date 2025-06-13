@@ -25,10 +25,10 @@ mod tests {
         let converter = setup_converter();
 
         let mut pricing = PricingDetail::new(1000.0, usd.clone(), idr.clone());
-        pricing.set_markup(MarkupType::Amount {
+        pricing.set_markup(Some(MarkupType::Amount {
             value: 49500.0,
             currency: idr.clone(),
-        });
+        }));
 
         pricing.apply_markup(&converter);
 
@@ -46,11 +46,11 @@ mod tests {
         let converter = setup_converter();
 
         let mut pricing = PricingDetail::new(1000.0, usd.clone(), idr.clone());
-        pricing.set_markup(MarkupType::Percentage(10.0));
+        pricing.set_markup(Some(MarkupType::Percentage(10.0)));
         pricing.apply_markup(&converter);
 
         // 10% of 1000 = 100 → sell_base = 1100 → IDR: 1100 * 16500 = 18,150,000
-        assert_eq!(pricing.get_markup_in_buy_currency().unwrap(), 100.0);
+        assert_eq!(pricing.get_markup_value_in_buy_currency().unwrap(), 100.0);
         assert!((pricing.get_sell_price() - 18150000.0).abs() < 0.01);
     }
 
@@ -60,7 +60,7 @@ mod tests {
         let converter = setup_converter();
 
         let mut pricing = PricingDetail::new(1000.0, usd.clone(), idr.clone());
-        pricing.set_markup(MarkupType::Commission(10.0));
+        pricing.set_markup(Some(MarkupType::Commission(10.0)));
         pricing.apply_markup(&converter);
 
         // 1000 / (1 - 0.1) = 1111.11
@@ -76,7 +76,7 @@ mod tests {
         pricing.apply_markup(&converter);
 
         assert_eq!(pricing.get_markup(), &None);
-        assert_eq!(pricing.get_markup_in_buy_currency().unwrap(), 0.0);
+        assert_eq!(pricing.get_markup_value_in_buy_currency().unwrap(), 0.0);
         assert_eq!(pricing.get_sell_price(), 16500000.0);
     }
 }

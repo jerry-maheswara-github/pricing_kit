@@ -57,6 +57,7 @@ use crate::Currency;
 ///
 /// Adjustments are intended to be applied in order using `PricingDetail::apply_adjustments()`.
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(tag = "price_adjustment", rename_all = "snake_case")]
 pub enum PriceAdjustment {
     Tax {
         name: String,
@@ -107,6 +108,7 @@ pub enum PriceAdjustment {
 ///
 /// This struct is intended to be serialization-friendly for logs, APIs, and reporting.
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(tag = "applied_adjustment", rename_all = "snake_case")]
 pub struct AppliedAdjustment {
     /// "Tax", "Discount", "Fixed"
     pub kind: String, 

@@ -30,15 +30,14 @@
 //!     converter.add_exchange_rate(&idr, 16500.0);
 //!
 //!     let mut pricing = PricingDetail::new(100.0, usd.clone(), idr.clone());
-//!     pricing.set_markup(MarkupType::Amount {
+//!     pricing.set_markup(Some(MarkupType::Amount {
 //!         value: 3500.0,
 //!         currency: idr.clone(),
-//!     });
+//!     }));
 //!
 //!     pricing.apply_markup(&converter);
 //!
-//!     let json = serde_json::to_string_pretty(&pricing)?;
-//!     println!("Pricing:\n{}", json);
+//!     println!("Pricing:\n{:#?}", pricing);
 //!
 //!     Ok(())
 //! }
@@ -59,7 +58,7 @@
 //!     converter.add_exchange_rate(&idr, 16500.0);
 //! 
 //!     let mut pricing = PricingDetail::new(100.0, usd.clone(), idr.clone());
-//!     pricing.set_markup(MarkupType::Percentage(20.0));
+//!     pricing.set_markup(Some(MarkupType::Percentage(20.0)));
 //!     pricing.apply_markup(&converter);
 //! 
 //!     let adjustments = vec![
@@ -80,8 +79,7 @@
 //! 
 //!     pricing.apply_adjustments(&adjustments, &converter);
 //! 
-//!     let json = serde_json::to_string_pretty(&pricing)?;
-//!     println!("==================\nAdjustment Pricing:\n{}", json);
+//!     println!("==================\nAdjustment Pricing:\n{:#?}", pricing);
 //! 
 //!     Ok(())
 //! }

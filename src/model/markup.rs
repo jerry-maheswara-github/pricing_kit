@@ -32,6 +32,7 @@ use crate::model::currency::Currency;
 /// MarkupType::Commission(10.0);
 /// ```
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(tag = "markup_type", rename_all = "snake_case")]
 pub enum MarkupType {
     /// A fixed markup amount in a specific currency.
     Amount {
