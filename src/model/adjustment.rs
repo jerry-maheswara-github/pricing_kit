@@ -1,3 +1,4 @@
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use crate::Currency;
 
@@ -37,20 +38,21 @@ use crate::Currency;
 /// # Example
 ///
 /// ```rust
+/// use rust_decimal_macros::dec;
 /// use pricing_kit::{Currency, PriceAdjustment};
 /// let discount = PriceAdjustment::Discount {
 ///     name: "Year End Promo".into(),
-///     percentage: 5.0,
+///     percentage: dec!(5.0),
 /// };
 ///
 /// let tax = PriceAdjustment::Tax {
 ///     name: "Tax 11%".into(),
-///     percentage: 11.0,
+///     percentage: dec!(11.0),
 /// };
 ///
 /// let fixed_fee = PriceAdjustment::Fixed {
 ///     name: "Admin Fee".into(),
-///     amount: 2.0,
+///     amount: dec!(2.0),
 ///     currency: Currency::new("USD", "US Dollar"),
 /// };
 /// ```
@@ -61,19 +63,18 @@ use crate::Currency;
 pub enum PriceAdjustment {
     Tax {
         name: String,
-        percentage: f64,
+        percentage: Decimal,
     },
     Discount {
         name: String,
-        percentage: f64,
+        percentage: Decimal,
     },
     Fixed {
         name: String,
-        amount: f64,
+        amount: Decimal,
         currency: Currency,
     },
 }
-
 
 /// Represents a final, applied price adjustment (e.g., tax, discount, or fixed fee)
 /// that has been calculated and converted to the target sell currency.
@@ -111,14 +112,14 @@ pub enum PriceAdjustment {
 #[serde(tag = "applied_adjustment", rename_all = "snake_case")]
 pub struct AppliedAdjustment {
     /// "Tax", "Discount", "Fixed"
-    pub kind: String, 
+    pub kind: AdjustmentKind,
 
     /// e.g., "Tax 11%"
     pub name: String, 
 
     /// for Tax/Discount
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub percentage: Option<f64>,
+    pub percentage: Option<Decimal>,
 
     /// always sell_currency
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -126,8 +127,17 @@ pub struct AppliedAdjustment {
 
     /// for Fixed
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub original_amount: Option<f64>, 
+    pub original_amount: Option<Decimal>,
 
     /// always in sell_currency
-    pub applied_amount: f64, 
+    pub applied_amount: Decimal,
+}
+
+/// Defines the category or type of price adjustment.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "adjustment_kind", rename_all = "snake_case")]
+pub enum AdjustmentKind {
+    Tax,
+    Discount,
+    Fixed,
 }

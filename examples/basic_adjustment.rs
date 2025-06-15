@@ -1,4 +1,4 @@
-use pricing_kit::{Currency, CurrencyConverter, PricingDetail, MarkupType};
+use pricing_kit::{Currency, CurrencyConverter, PricingDetail, MarkupType, dec};
 use pricing_kit::PriceAdjustment;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -6,32 +6,32 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let idr = Currency::new("IDR", "Indonesian Rupiah");
 
     let mut converter = CurrencyConverter::new();
-    converter.add_exchange_rate(&usd, 1.0);
-    converter.add_exchange_rate(&idr, 16500.0);
+    converter.add_exchange_rate(&usd, dec!(1.0));
+    converter.add_exchange_rate(&idr, dec!(16500.0));
 
-    let mut pricing = PricingDetail::new(100.0, usd.clone(), idr.clone());
-    pricing.set_markup(Some(MarkupType::Percentage(20.0)));
-    pricing.apply_markup(&converter);
+    let mut pricing = PricingDetail::new(dec!(100.0), usd.clone(), idr.clone());
+    pricing.markup = Some(MarkupType::Percentage(dec!(20.0)));
+    pricing.apply_markup(&converter)?;
 
     let adjustments = vec![
         PriceAdjustment::Tax {
             name: "Tax 11%".into(),
-            percentage: 11.0,
+            percentage: dec!(11.0),
         },
         PriceAdjustment::Discount {
             name: "Discount".into(),
-            percentage: 5.0,
+            percentage: dec!(5.0),
         },
         PriceAdjustment::Fixed {
             name: "Promo New Year".to_string(),
-            amount: 10.0,
+            amount: dec!(10.0),
             currency: pricing.sell_currency.clone(),
         }
     ];
 
-    pricing.apply_adjustments(&adjustments, &converter);
+    pricing.apply_adjustments(&adjustments, &converter)?;
     
-    println!("==================\nAdjustment Pricing:\n{:#?}", pricing);
+    println!("Adjustment Pricing:\n{:#?}", pricing);
 
     // Manual calculation for comparative purpose:
     // 1. Buy price in USD: 100.0

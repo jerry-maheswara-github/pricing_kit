@@ -27,8 +27,11 @@ pub mod markup;
 /// - Application logic for transforming `PriceAdjustment` into `AppliedAdjustment`.
 pub mod adjustment;
 
-pub use currency::Currency;
-pub use currency::CurrencyConverter;
-pub use pricing::PricingDetail;
-pub use markup::MarkupType;
-pub use adjustment::PriceAdjustment;
+/// Represents possible errors that can occur during currency conversion.
+pub mod error;
+
+pub use currency::*;
+pub use pricing::*;
+pub use markup::*;
+pub use adjustment::*;
+pub use error::*;

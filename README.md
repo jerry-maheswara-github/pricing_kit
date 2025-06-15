@@ -8,91 +8,102 @@ A flexible and extensible Rust library for calculating and managing product pric
   - Flat amount markups
   - Percentage markups
   - Commissions in other currencies
-- Support for **multi-currency** operations using exchange rates
+- Support for **multi-currency** operations using exchange rates, ensuring **financial precision** with `Decimal` types.
 - Support for **adjustments** such as:
   - **Tax** calculations with percentage-based rates
   - **Discounts** based on percentage
   - **Fixed fees** with customizable currencies
-- Clean and extensible API design, ready for future enhancements
+- Clean and extensible API design, ready for future enhancements.
 
+---
 
 ## ⚡ Quick Start
 
 ```rust
-use pricing_kit::{Currency, CurrencyConverter, PricingDetail, MarkupType};
+use pricing_kit::{Currency, CurrencyConverter, MarkupType, PricingDetail, dec};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let usd = Currency::new("USD", "American Dollar");
     let idr = Currency::new("IDR", "Indonesian Rupiah");
 
     let mut converter = CurrencyConverter::new();
-    converter.add_exchange_rate(&usd, 1.0);
-    converter.add_exchange_rate(&idr, 16500.0);
+    converter.add_exchange_rate(&usd, dec!(1.0));     // Use dec! for Decimal
+    converter.add_exchange_rate(&idr, dec!(16500.0)); // Use dec! for Decimal
 
-    let mut pricing = PricingDetail::new(100.0, usd.clone(), idr.clone());
-    pricing.set_markup(MarkupType::Amount {
-        value: 3500.0,
+    // Initialize PricingDetail with Decimal buy_price
+    let mut pricing = PricingDetail::new(dec!(100.0), usd.clone(), idr.clone());
+    
+    // Directly set the `markup` field (no more `set_markup` method)
+    pricing.markup = Some(MarkupType::Amount {
+        value: dec!(3500.0), // Use dec! for Decimal
         currency: idr.clone(),
     });
 
-    pricing.apply_markup(&converter);
+    // Call `apply_markup` and handle the Result
+    pricing.apply_markup(&converter)?;
 
-    let json = serde_json::to_string_pretty(&pricing)?;
-    println!("Pricing:\n{}", json);
+    println!("Pricing after markup:\n{:#?}", pricing);
 
     Ok(())
 }
 ```
 
-## ⚡ Adjustment feature example
+---
+
+## ⚡ Adjustment Feature Example
 
 ```rust
-use pricing_kit::{Currency, CurrencyConverter, PricingDetail, MarkupType};
-use pricing_kit::PriceAdjustment;
+use pricing_kit::{Currency, CurrencyConverter, PricingDetail, PriceAdjustment, MarkupType, dec};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let usd = Currency::new("USD", "American Dollar");
     let idr = Currency::new("IDR", "Indonesian Rupiah");
 
     let mut converter = CurrencyConverter::new();
-    converter.add_exchange_rate(&usd, 1.0);
-    converter.add_exchange_rate(&idr, 16500.0);
+    converter.add_exchange_rate(&usd, dec!(1.0));     // Use dec! for Decimal
+    converter.add_exchange_rate(&idr, dec!(16500.0)); // Use dec! for Decimal
 
-    let mut pricing = PricingDetail::new(100.0, usd.clone(), idr.clone());
-    pricing.set_markup(MarkupType::Percentage(20.0));
-    pricing.apply_markup(&converter);
+    // Initialize PricingDetail with Decimal buy_price
+    let mut pricing = PricingDetail::new(dec!(100.0), usd.clone(), idr.clone());
+    
+    // Directly set the `markup` field
+    pricing.markup = Some(MarkupType::Percentage(dec!(20.0))); // Use dec!
+    pricing.apply_markup(&converter)?; // Handle Result
 
     let adjustments = vec![
         PriceAdjustment::Tax {
             name: "Tax 11%".into(),
-            percentage: 11.0,
+            percentage: dec!(11.0), // Use dec!
         },
         PriceAdjustment::Discount {
             name: "Discount".into(),
-            percentage: 5.0,
+            percentage: dec!(5.0), // Use dec!
         },
         PriceAdjustment::Fixed {
             name: "Promo New Year".to_string(),
-            amount: 10.0,
-            currency: pricing.sell_currency.clone(),
+            amount: dec!(10.0), // Use dec!
+            // Directly access `sell_currency` field
+            currency: pricing.sell_currency.clone(), 
         }
     ];
 
-    pricing.apply_adjustments(&adjustments, &converter);
+    // Call `apply_adjustments` and handle the Result
+    pricing.apply_adjustments(&adjustments, &converter)?;
 
-    let json = serde_json::to_string_pretty(&pricing)?;
-    println!("==================\nAdjustment Pricing:\n{}", json);
+    println!("==================\nAdjustment Pricing:\n{:#?}", pricing);
 
     Ok(())
 }
 ```
+
+---
 
 ## 🎯 Crate Goals
 
 This crate is designed to be:
 
 - Easy to use for common e-commerce and fintech pricing scenarios
-- Accurate, currency-aware, and reliable in financial calculations
+- **Accurate**, currency-aware, and reliable in financial calculations through explicit `Decimal` usage.
 - Ready for dynamic adjustments such as tax, discount, and fixed fees
 - Extensible for future features like tiered pricing, tax rules, and promotions
 
@@ -121,4 +132,3 @@ Pull requests, issues, and feedback are welcome!
 If you find this crate useful, give it a ⭐ and share it with others in the Rust community.
 
 ---
-
