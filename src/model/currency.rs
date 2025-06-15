@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
+use rust_decimal::Decimal;
+pub(crate) use crate::CurrencyConverterError;
 
 /// Represents a currency with a standard code and a human-readable name.
 ///
@@ -9,10 +11,10 @@ use serde::{Deserialize, Serialize};
 ///
 /// # Fields
 ///
-/// - `code`:  
+/// - `code`:
 ///   A 3-letter ISO currency code in uppercase (e.g. `"USD"`, `"EUR"`, `"IDR"`).
 ///
-/// - `name`:  
+/// - `name`:
 ///   The full name of the currency (e.g. `"US Dollar"`, `"Indonesian Rupiah"`).
 ///
 /// # Traits
@@ -23,7 +25,8 @@ use serde::{Deserialize, Serialize};
 ///
 /// # Example
 ///
-/// ```code
+/// ```
+/// use pricing_kit::Currency;
 /// let usd = Currency::new("USD", "US Dollar");
 /// assert_eq!(usd.get_code(), "USD");
 /// assert_eq!(usd.get_name(), "US Dollar");
@@ -77,30 +80,34 @@ impl Currency {
 ///
 /// # Fields
 ///
-/// - `exchange_rates`:  
-///   A map of currency codes (`String`) to their exchange rate values (`f64`).  
+/// - `exchange_rates`:
+///   A map of currency codes (`String`) to their exchange rate values (`Decimal`).
 ///   These rates are relative to an arbitrary common base.
 ///
 /// # Example
 ///
-/// ```code
+/// ```
+/// # use pricing_kit::{Currency, CurrencyConverter, CurrencyConverterError};
+/// # use rust_decimal_macros::dec;
 /// let mut converter = CurrencyConverter::new();
 /// let usd = Currency::new("USD", "US Dollar");
 /// let idr = Currency::new("IDR", "Indonesian Rupiah");
 ///
-/// converter.add_exchange_rate(&usd, 1.0);      // base currency
-/// converter.add_exchange_rate(&idr, 16500.0);  // 1 USD = 16500 IDR
+/// converter.add_exchange_rate(&usd, dec!(1.0));       // base currency
+/// converter.add_exchange_rate(&idr, dec!(16500.0));   // 1 USD = 16500 IDR
 ///
-/// let amount_in_idr = converter.convert(100.0, &usd, &idr);  // result: 1_650_000.0
+/// let amount_in_idr = converter.convert(dec!(100.0), &usd, &idr).unwrap();
+/// assert_eq!(amount_in_idr, dec!(1_650_000.0));
 /// ```
 ///
 /// # Usage Notes
 ///
-/// - Missing exchange rates will fallback to `1.0`, so always validate your inputs.
+/// - Missing exchange rates will result in an error (`CurrencyConverterError::RateNotFound`),
+///   requiring explicit handling.
 /// - To get precise results, make sure exchange rates are consistently set relative to the same base currency.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct CurrencyConverter {
-    exchange_rates: HashMap<String, f64>,
+    exchange_rates: HashMap<String, Decimal>,
 }
 
 impl CurrencyConverter {
@@ -120,8 +127,8 @@ impl CurrencyConverter {
     /// # Arguments
     ///
     /// * `currency` - The currency to add the exchange rate for.
-    /// * `rate` - The exchange rate for the given currency.
-    pub fn add_exchange_rate(&mut self, currency: &Currency, rate: f64) {
+    /// * `rate` - The exchange rate for the given currency (as `Decimal`).
+    pub fn add_exchange_rate(&mut self, currency: &Currency, rate: Decimal) {
         self.exchange_rates.insert(currency.get_code().to_string(), rate);
     }
 
@@ -129,67 +136,80 @@ impl CurrencyConverter {
     ///
     /// # Arguments
     ///
-    /// * `amount` - The amount to convert.
+    /// * `amount` - The amount to convert (as `Decimal`).
     /// * `from` - The currency to convert from.
     /// * `to` - The currency to convert to.
     ///
     /// # Returns
     ///
-    /// The converted amount in the target currency.
-    pub fn convert(&self, amount: f64, from: &Currency, to: &Currency) -> f64 {
+    /// `Ok(Decimal)` if the conversion is successful, or `Err(CurrencyConverterError)`
+    /// if an exchange rate is missing or a division by zero occurs.
+    pub fn convert(&self, amount: Decimal, from: &Currency, to: &Currency) -> Result<Decimal, CurrencyConverterError> {
         if from.get_code() == to.get_code() {
-            return amount;
+            return Ok(amount);
         }
 
-        let from_rate = *self.exchange_rates.get(from.get_code()).unwrap_or(&1.0);
-        let to_rate = *self.exchange_rates.get(to.get_code()).unwrap_or(&1.0);
+        let from_rate = self.exchange_rates.get(from.get_code())
+            .ok_or_else(|| CurrencyConverterError::RateNotFound(from.get_code().to_string()))?;
 
-        (amount / from_rate) * to_rate
+        let to_rate = self.exchange_rates.get(to.get_code())
+            .ok_or_else(|| CurrencyConverterError::RateNotFound(to.get_code().to_string()))?;
+
+        // Check division by zero before performing the operation.
+        if from_rate.is_zero() {
+            return Err(CurrencyConverterError::DivisionByZero);
+        }
+
+        // Decimal automatically handles precision
+        let converted_amount = (amount / from_rate) * to_rate;
+
+        Ok(converted_amount)
     }
 
     /// Retrieves the exchange rate for the specified currency from the stored exchange rates.
     ///
-    /// This function looks up the exchange rate for a given currency code (e.g., `"USD"`, `"IDR"`) 
-    /// and returns the rate as a `f64` value, representing the amount of the base currency equivalent 
+    /// This function looks up the exchange rate for a given currency code (e.g., `"USD"`, `"IDR"`)
+    /// and returns the rate as a `Decimal` value, representing the amount of the base currency equivalent
     /// to one unit of the given currency. If the exchange rate is not found, it returns `None`.
     ///
     /// # Arguments
     ///
-    /// - `currency`:  
+    /// - `currency`:
     ///   A reference to the `Currency` for which the exchange rate is needed.
     ///
     /// # Returns
     ///
-    /// - `Option<f64>`:  
-    ///   - `Some(f64)` if the exchange rate exists for the given currency code.
+    /// - `Option<Decimal>`:
+    ///   - `Some(Decimal)` if the exchange rate exists for the given currency code.
     ///   - `None` if the currency code does not have a stored exchange rate.
     ///
     /// # Example
     ///
-    /// ```code
+    /// ```
+    /// # use pricing_kit::{Currency, CurrencyConverter};
+    /// # use rust_decimal_macros::dec;
     /// let mut converter = CurrencyConverter::new();
     /// let usd = Currency::new("USD", "US Dollar");
     /// let idr = Currency::new("IDR", "Indonesian Rupiah");
     ///
     /// // Adding exchange rates
-    /// converter.add_exchange_rate(&usd, 1.0);      // Base currency
-    /// converter.add_exchange_rate(&idr, 16500.0);  // 1 USD = 16,500 IDR
+    /// converter.add_exchange_rate(&usd, dec!(1.0));      // Base currency
+    /// converter.add_exchange_rate(&idr, dec!(16500.0));  // 1 USD = 16,500 IDR
     ///
     /// // Get exchange rate for USD
     /// let usd_rate = converter.get_exchange_rate(&usd);
-    /// assert_eq!(usd_rate, Some(1.0));  // USD rate is 1.0 (base currency)
+    /// assert_eq!(usd_rate, Some(dec!(1.0)));  // USD rate is 1.0 (base currency)
     ///
     /// // Get exchange rate for IDR
     /// let idr_rate = converter.get_exchange_rate(&idr);
-    /// assert_eq!(idr_rate, Some(16500.0));  // IDR rate is 16500
+    /// assert_eq!(idr_rate, Some(dec!(16500.0)));  // IDR rate is 16500
     /// ```
     ///
     /// # Notes
     ///
     /// - If the currency is not found in the exchange rates map, the method returns `None`.
     /// - The base currency (often `USD` or any standard reference) should be initialized with a rate of `1.0`.
-    pub fn get_exchange_rate(&self, currency: &Currency) -> Option<f64> {
+    pub fn get_exchange_rate(&self, currency: &Currency) -> Option<Decimal> {
         self.exchange_rates.get(currency.get_code()).copied()
     }
-
 }

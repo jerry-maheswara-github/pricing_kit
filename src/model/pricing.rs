@@ -1,7 +1,10 @@
 use serde::{Deserialize, Serialize};
-use crate::model::adjustment::{AppliedAdjustment, PriceAdjustment};
-use crate::model::currency::{Currency, CurrencyConverter};
+use crate::model::adjustment::{AdjustmentKind, AppliedAdjustment, PriceAdjustment};
+use crate::model::currency::{Currency, CurrencyConverter, CurrencyConverterError}; // Import CurrencyConverterError
 use crate::model::markup::MarkupType;
+use rust_decimal::Decimal;
+use rust_decimal_macros::dec;
+use crate::PricingError;
 
 /// Represents the full pricing information of a product, including
 /// markup and currency conversion details.
@@ -17,7 +20,7 @@ use crate::model::markup::MarkupType;
 ///   The original price of the product in the `buy_currency`.
 ///
 /// - `sell_price`:
-///   The final price after applying the markup, in the `sell_currency`.
+///   The final price after applying the markup and adjustments, in the `sell_currency`.
 ///
 /// - `buy_currency`:
 ///   The currency used when purchasing the product (e.g., USD).
@@ -48,6 +51,9 @@ use crate::model::markup::MarkupType;
 ///   Derived from `sell_currency_rate / buy_currency_rate`; represents the effective
 ///   rate from `buy_currency` to `sell_currency`.
 ///
+/// - `applied_adjustments`:
+///   A list of adjustments (e.g., discounts, fees) applied to the pricing calculation.
+///
 /// # Example Use Case
 ///
 /// A product is bought in USD, marked up using an IDR amount, and sold in IDR.
@@ -58,38 +64,36 @@ use crate::model::markup::MarkupType;
 /// Supports serialization with `serde` for logging, debugging, or API responses.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PricingDetail {
-    /// The base price at which the product was bought.
-    pub buy_price: f64,
-    /// The final price at which the product will be sold.
-    pub sell_price: f64,
-    /// The currency used for the buy transaction.
+    pub buy_price: Decimal,
+    pub sell_price: Decimal, // This will be the final price after markup & adjustment.
     pub buy_currency: Currency,
-    /// The currency used for the sell transaction.
     pub sell_currency: Currency,
-    /// The markup strategy applied to the buy price.
     pub markup: Option<MarkupType>,
-    /// The markup value converted to the buy currency.
-    pub markup_value_in_buy_currency: Option<f64>,
-    /// The markup value represented in the sell currency.
-    pub markup_value_in_sell_currency: Option<f64>,
-    /// The buy price after markup, before currency conversion.
-    pub converted_buy_price: Option<f64>,
-    /// Exchange rate of the buy currency relative to a common base.
-    pub buy_currency_rate: Option<f64>,
-    /// Exchange rate of the sell currency relative to the same base.
-    pub sell_currency_rate: Option<f64>,
-    /// Effective exchange rate from buy_currency to sell_currency.
-    pub exchange_rate: Option<f64>,
+
+    // Field-field hasil perhitungan (dibuat private jika hanya diisi internal)
+    // Jika ingin diakses langsung dari luar, biarkan pub.
+    // Untuk contoh ini, saya akan biarkan pub agar tidak terlalu banyak perubahan getter/setter.
+    pub markup_value_in_buy_currency: Option<Decimal>,
+    pub markup_value_in_sell_currency: Option<Decimal>,
+    pub converted_buy_price: Option<Decimal>, // buy_price + markup_in_buy_currency
+
+    pub buy_currency_rate: Option<Decimal>,
+    pub sell_currency_rate: Option<Decimal>,
+    pub exchange_rate: Option<Decimal>,
 
     pub applied_adjustments: Vec<AppliedAdjustment>,
 }
 
 impl PricingDetail {
-
-    pub fn new(buy_price: f64, buy_currency: Currency, sell_currency: Currency) -> Self {
+    /// Creates a new `PricingDetail` instance.
+    ///
+    /// This constructor only initializes the basic pricing parameters.
+    /// To calculate the full pricing details including markup and adjustments,
+    /// `calculate_final_price` method must be called.
+    pub fn new(buy_price: Decimal, buy_currency: Currency, sell_currency: Currency) -> Self {
         Self {
             buy_price,
-            sell_price: 0.0,
+            sell_price: dec!(0.0), // sell_price diinisialisasi 0.0 dan akan dihitung
             buy_currency,
             sell_currency,
             markup: None,
@@ -103,143 +107,159 @@ impl PricingDetail {
         }
     }
 
-    pub fn get_buy_price(&self) -> f64 {
-        self.buy_price
-    }
+    /// Calculates and applies markup to the buy price.
+    ///
+    /// This method updates internal fields related to markup and currency rates.
+    /// It must be called before `apply_adjustments`.
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` if all required exchange rates are found and markup calculation is successful.
+    /// `Err(PricingError)` otherwise.
+    pub fn apply_markup(&mut self, converter: &CurrencyConverter) -> Result<(), PricingError> {
+        // --- 1. Retrieve Exchange Rates Safely (Using Result)---
+        let buy_rate = converter.get_exchange_rate(&self.buy_currency)
+            .ok_or_else(|| CurrencyConverterError::RateNotFound(self.buy_currency.get_code().to_string()))
+            .map_err(PricingError::RateCalculationFailed)?;
 
-    pub fn get_sell_price(&self) -> f64 {
-        self.sell_price
-    }
+        let sell_rate = converter.get_exchange_rate(&self.sell_currency)
+            .ok_or_else(|| CurrencyConverterError::RateNotFound(self.sell_currency.get_code().to_string()))
+            .map_err(PricingError::RateCalculationFailed)?;
 
-    pub fn get_buy_currency(&self) -> &Currency {
-        &self.buy_currency
-    }
-
-    pub fn get_sell_currency(&self) -> &Currency {
-        &self.sell_currency
-    }
-
-    pub fn get_markup(&self) -> &Option<MarkupType> {
-        &self.markup
-    }
-
-    pub fn set_markup(&mut self, markup: MarkupType) {
-        self.markup = Some(markup);
-    }
-
-    pub fn get_buy_currency_rate(&self) -> Option<f64> {
-        self.buy_currency_rate
-    }
-
-    pub fn get_sell_currency_rate(&self) -> Option<f64> {
-        self.sell_currency_rate
-    }
-
-    pub fn get_exchange_rate(&self) -> Option<f64> {
-        match (self.buy_currency_rate, self.sell_currency_rate) {
-            (Some(buy), Some(sell)) => Some(sell / buy),
-            _ => None,
+        if buy_rate.is_zero() {
+            return Err(PricingError::RateCalculationFailed(CurrencyConverterError::DivisionByZero));
         }
-    }
-
-    pub fn get_markup_value_in_buy_currency(&self) -> Option<f64> {
-        self.markup_value_in_buy_currency
-    }
-
-    pub fn get_markup_value_in_sell_currency(&self) -> Option<f64> {
-        self.markup_value_in_sell_currency
-    }
-
-    pub fn get_converted_buy_price(&self) -> Option<f64> {
-        self.converted_buy_price
-    }
-    pub fn get_markup_in_sell_currency(&self) -> Option<f64> {
-        self.markup_value_in_sell_currency
-    }
-
-    pub fn get_markup_in_buy_currency(&self) -> Option<f64> {
-        self.markup_value_in_buy_currency
-    }
-
-    pub fn apply_markup(&mut self, converter: &CurrencyConverter) {
-        let buy_rate = converter.get_exchange_rate(&self.buy_currency).unwrap_or(1.0);
-        let sell_rate = converter.get_exchange_rate(&self.sell_currency).unwrap_or(1.0);
+        let exchange_rate = sell_rate / buy_rate;
 
         self.buy_currency_rate = Some(buy_rate);
         self.sell_currency_rate = Some(sell_rate);
-        self.exchange_rate = Some(sell_rate / buy_rate);
+        self.exchange_rate = Some(exchange_rate);
 
+        // --- 2. Handle Markup Calculation ---
         let markup_in_buy = match &self.markup {
             Some(MarkupType::Amount { value, currency }) => {
                 converter.convert(*value, currency, &self.buy_currency)
-            },
-            Some(MarkupType::Percentage(pct)) => self.buy_price * pct / 100.0,
-            Some(MarkupType::Commission(pct)) => self.buy_price * pct / (100.0 - pct),
-            None => 0.0,
+                    .map_err(PricingError::RateCalculationFailed)?
+            }
+            Some(MarkupType::Percentage(pct)) => {
+                self.buy_price * (*pct / dec!(100.0))
+            }
+            Some(MarkupType::Commission(pct)) => {
+                if *pct >= dec!(100.0) {
+                    return Err(PricingError::InvalidMarkupCalculation(
+                        format!("Commission percentage ({}) must be less than 100.", pct)
+                    ));
+                }
+                self.buy_price * (*pct / (dec!(100.0) - pct))
+            }
+            None => dec!(0.0),
         };
 
         self.markup_value_in_buy_currency = Some(markup_in_buy);
         let sell_base = self.buy_price + markup_in_buy;
         self.converted_buy_price = Some(sell_base);
+        let initial_sell_price = sell_base * exchange_rate;
+        self.markup_value_in_sell_currency = Some(markup_in_buy * exchange_rate);
+        self.sell_price = initial_sell_price;
 
-        let converted = (sell_base / buy_rate) * sell_rate;
-        self.markup_value_in_sell_currency = Some((markup_in_buy / buy_rate) * sell_rate);
-        self.sell_price = converted;
+        Ok(())
     }
+
+    /// Applies a list of price adjustments (taxes, discounts, fixed fees) to the sell price.
+    ///
+    /// This method modifies the `sell_price` based on the given adjustments
+    /// and populates the `applied_adjustments` list.
+    /// This method should typically be called after `apply_markup`.
+    ///
+    /// # Arguments
+    ///
+    /// * `adjustments` - A slice of `PriceAdjustment` to apply.
+    /// * `converter` - A reference to the `CurrencyConverter`.
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` if all adjustments are applied successfully.
+    /// `Err(PricingError)` if any currency conversion during adjustment fails.
     pub fn apply_adjustments(
         &mut self,
         adjustments: &[PriceAdjustment],
         converter: &CurrencyConverter,
-    ) {
-        let mut final_price = self.sell_price;
+    ) -> Result<(), PricingError> {
+        let mut current_sell_price = self.sell_price;
         self.applied_adjustments.clear();
 
         for adj in adjustments {
             let applied = match adj {
                 PriceAdjustment::Tax { name, percentage } => {
-                    let amt = final_price * (percentage / 100.0);
-                    final_price += amt;
+                    let amt = current_sell_price * (*percentage / dec!(100.0));
+                    current_sell_price += amt;
                     AppliedAdjustment {
-                        kind: "Tax".into(),
+                        kind: AdjustmentKind::Tax,
                         name: name.clone(),
                         percentage: Some(*percentage),
                         original_currency: Some(self.sell_currency.clone()),
-                        original_amount: Some(amt),
+                        original_amount: None,
                         applied_amount: amt,
                     }
                 }
 
                 PriceAdjustment::Discount { name, percentage } => {
-                    let amt = final_price * (percentage / 100.0);
-                    final_price -= amt;
+                    let amt = current_sell_price * (*percentage / dec!(100.0));
+                    current_sell_price -= amt;
                     AppliedAdjustment {
-                        kind: "Discount".into(),
+                        kind: AdjustmentKind::Discount,
                         name: name.clone(),
                         percentage: Some(*percentage),
                         original_currency: Some(self.sell_currency.clone()),
-                        original_amount: Some(amt),
+                        original_amount: None,
                         applied_amount: -amt,
                     }
                 }
 
                 PriceAdjustment::Fixed { name, amount, currency } => {
-                    let converted = converter.convert(*amount, currency, &self.sell_currency);
-                    final_price += converted;
+                    let converted_amount_in_sell_currency = converter.convert(*amount, currency, &self.sell_currency)
+                        .map_err(PricingError::AdjustmentFailed)?;
+
+                    current_sell_price += converted_amount_in_sell_currency;
                     AppliedAdjustment {
-                        kind: "Fixed".into(),
+                        kind: AdjustmentKind::Fixed,
                         name: name.clone(),
                         percentage: None,
                         original_currency: Some(currency.clone()),
                         original_amount: Some(*amount),
-                        applied_amount: converted,
+                        applied_amount: converted_amount_in_sell_currency,
                     }
                 }
             };
-
             self.applied_adjustments.push(applied);
         }
 
-        self.sell_price = final_price;
+        self.sell_price = current_sell_price;
+        Ok(())
+    }
+
+    /// Recalculates all pricing details from scratch, applying markup and adjustments.
+    ///
+    /// This is the primary method to ensure all derived pricing fields are up-to-date
+    /// after initial creation or modification of `buy_price`, `currencies`, `markup`,
+    /// or `adjustments`.
+    ///
+    /// # Arguments
+    ///
+    /// * `converter` - A reference to the `CurrencyConverter`.
+    /// * `adjustments` - A slice of `PriceAdjustment` to apply after markup.
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` if all calculations and applications are successful.
+    /// `Err(PricingError)` if any underlying calculation or conversion fails.
+    pub fn calculate_final_price(
+        &mut self,
+        converter: &CurrencyConverter,
+        adjustments: &[PriceAdjustment],
+    ) -> Result<(), PricingError> {
+        self.apply_markup(converter)?;
+        self.apply_adjustments(adjustments, converter)?;
+        Ok(())
     }
 }
-

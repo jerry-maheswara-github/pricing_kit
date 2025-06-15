@@ -1,3 +1,4 @@
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use crate::model::currency::Currency;
 
@@ -32,16 +33,17 @@ use crate::model::currency::Currency;
 /// MarkupType::Commission(10.0);
 /// ```
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(tag = "markup_type", rename_all = "snake_case")]
 pub enum MarkupType {
     /// A fixed markup amount in a specific currency.
     Amount {
         /// The fixed markup value (e.g. 50_000.0).
-        value: f64,
+        value: Decimal,
         /// The currency in which the markup value is denominated.
         currency: Currency,
     },
     /// A markup defined as a percentage of the buy price.
-    Percentage(f64),
+    Percentage(Decimal),
     /// A commission-based markup (markup as a percentage of the final price).
-    Commission(f64),
+    Commission(Decimal),
 }
