@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use crate::model::adjustment::{AdjustmentKind, AppliedAdjustment, PriceAdjustment};
-use crate::model::currency::{Currency, CurrencyConverter, CurrencyConverterError}; // Import CurrencyConverterError
+use crate::model::currency::{Currency, CurrencyConverter, CurrencyConverterError};
 use crate::model::markup::MarkupType;
 use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
@@ -69,18 +69,12 @@ pub struct PricingDetail {
     pub buy_currency: Currency,
     pub sell_currency: Currency,
     pub markup: Option<MarkupType>,
-
-    // Field-field hasil perhitungan (dibuat private jika hanya diisi internal)
-    // Jika ingin diakses langsung dari luar, biarkan pub.
-    // Untuk contoh ini, saya akan biarkan pub agar tidak terlalu banyak perubahan getter/setter.
     pub markup_value_in_buy_currency: Option<Decimal>,
     pub markup_value_in_sell_currency: Option<Decimal>,
     pub converted_buy_price: Option<Decimal>, // buy_price + markup_in_buy_currency
-
     pub buy_currency_rate: Option<Decimal>,
     pub sell_currency_rate: Option<Decimal>,
     pub exchange_rate: Option<Decimal>,
-
     pub applied_adjustments: Vec<AppliedAdjustment>,
 }
 
@@ -93,7 +87,7 @@ impl PricingDetail {
     pub fn new(buy_price: Decimal, buy_currency: Currency, sell_currency: Currency) -> Self {
         Self {
             buy_price,
-            sell_price: dec!(0.0), // sell_price diinisialisasi 0.0 dan akan dihitung
+            sell_price: dec!(0.0), 
             buy_currency,
             sell_currency,
             markup: None,
