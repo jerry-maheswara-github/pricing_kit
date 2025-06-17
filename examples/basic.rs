@@ -1,6 +1,6 @@
-use pricing_kit::{Currency, CurrencyConverter, PricingDetail, MarkupType, dec};
+use pricing_kit::{Currency, CurrencyConverter, PricingDetail, MarkupType, dec, ToPrimitive};
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() {
     let usd = Currency::new("USD", "American Dollar");
     let idr = Currency::new("IDR", "Indonesian Rupiah");
 
@@ -12,12 +12,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Access the `markup` field directly
     pricing.markup = Some(MarkupType::Amount {
-        value: dec!(3500.0),
+        value: dec!(3500),
         currency: idr.clone(),
     });
 
     // Call `apply_markup` or `calculate_final_price`
-    pricing.apply_markup(&converter)?; // Handling Results using `?`
+    pricing.apply_markup(&converter).expect("Failed to apply markup");
 
     println!("Pricing after markup:\n{:#?}", pricing);
 
@@ -28,6 +28,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 4. Exchange rate USD → IDR = 16500
     // 5. Final sell price: 100.21212121 * 16500 = 1_653_500.0 IDR
 
+    if let Some(total_f64) = pricing.sell_price.to_f64() {
+        println!("Total sell price as f64: {}", total_f64);
+    }
 
-    Ok(())
 }

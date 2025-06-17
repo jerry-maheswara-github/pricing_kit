@@ -32,9 +32,9 @@ pub(crate) use crate::CurrencyConverterError;
 /// assert_eq!(usd.get_name(), "US Dollar");
 /// ```
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Currency {
-    code: String,
-    name: String,
+pub struct Currency { 
+    pub code: String,
+    pub name: String,
 }
 
 impl Currency {
